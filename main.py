@@ -5,7 +5,7 @@
 #    | |\/| / / \ | |\ | / / \ | |_) / / \ | |   \ \_/ 
 #    |_|  | \_\_/ |_| \| \_\_/ |_|   \_\_/ |_|__  |_|  
 #
-#                       Anish Gupta                     
+#                         Anish G                     
 #                   github.com/neur0n-7
 
 
@@ -351,6 +351,7 @@ TITLE_ASCII = """
 |___|___| \\___/ |__|__| \\___/ |__|   \\___/ |_____||____/ 
 """
 
+# for railroads
 TRAIN_ASCII = """
 ____
 |DD|____T_
@@ -358,6 +359,7 @@ ____
  @-@-@-oo\\
 """
 
+# For electric company
 BULB_ASCII = f"""_____
 /       \\
 |         |
@@ -367,6 +369,7 @@ BULB_ASCII = f"""_____
 |___|
 """
 
+# for water company
 TAP_ASCII = """
 	=()=
 ,/'\\_||_
@@ -1309,7 +1312,6 @@ def game_loop():
 						save_choice = interactive_choice("Select an option:", ["Yes", "No"])
 						if save_choice == "Yes":
 							save_game()
-							
 						else:
 							c.print("[red]Game state not saved.[/red]")
 
@@ -1530,7 +1532,7 @@ if __name__ == '__main__':
 
 		c.print(TITLE_ASCII, style="bold cyan")
 		c.print("The Classic Edition")
-		c.print('Made by Anish Gupta\n')
+		c.print('Made by Anish G\n')
 
 		c.print("Would you like to load a saved game or create a new game?")
 		load_or_new = interactive_choice("Select an option:", ["Create a new game", "Load a saved game"])
