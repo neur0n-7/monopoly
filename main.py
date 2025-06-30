@@ -368,11 +368,11 @@ BULB_ASCII = f"""_____
 """
 
 TAP_ASCII = """
-	=()=
+   =()=
 ,/'\\_||_
 ( (___  `.
 `\\./  `=='
-	  ||||
+      ||||
 """
 
 #####################################################################################################################
@@ -408,7 +408,6 @@ class Player:
 		get_property(): Adds a property to the player's ownership and deducts cost
 		mortgage(): Mortgages a property and collects half its value
 		unmortgage(): Unmortgages a property and pays back with interest
-		sell_property(): Sells a property and collects its value
 		build_house(): Builds a house/hotel on a property
 		pay_fees(): Pays fees, handling bankruptcy and asset liquidation if needed
 		pay_fees_to_player(): Pays fees to another player, handling bankruptcy and asset liquidation if needed
@@ -472,16 +471,8 @@ class Player:
 		
 	def unmortgage(self,property):
 		self.mortgaged_properties.remove(property)
-		self.pay_without_networth(1.1*(get_property_cost(property)//2))
+		self.pay_without_networth(int(1.1*(get_property_cost(property)/2)))
 	
-	def sell_property(self,property):
-		if property in STATIONS:
-			self.railroads_owned.remove(property)
-		elif property in UTILITIES:
-			self.utilities_owned.remove(property)
-		else:
-			self.norm_properties_owned.remove(property)
-
 	def build_house(self,property):
 		if property in self.buildings:
 			self.buildings[property]+=1
@@ -489,9 +480,6 @@ class Player:
 				self.buildings[property]='HOTEL'
 		else:
 			self.buildings[property]=1
-
-		self.pay_fees_without_networth(get_building_cost(property))
-
 
 	def pay_fees_without_networth(self, fees):
 		global non_bankrupt
@@ -511,7 +499,7 @@ class Player:
 			self.pay_without_networth(fees)
 		else:
 			self.pay_without_networth(fees)
-			c.print(f"[red][bold]{self.name}[/bold], you paid the fee. You now have [bold]${self.cash}[/bold].[/red]")
+			c.print(f"[bold]{self.name}[/bold], you paid the fee. You now have [bold]${self.cash}[/bold].")
 
 	def pay_fees(self, fees):
 		global non_bankrupt
@@ -590,6 +578,9 @@ class Player:
 		table.add_row("Railroads:", list_or_dash(self.railroads_owned))
 		table.add_row("Utilities:", list_or_dash(self.utilities_owned))
 		table.add_row("Mortgaged:", list_or_dash(self.mortgaged_properties))
+		table.add_row("Houses:", list_or_dash([f"{loc} ({num})" for loc, num in self.buildings.items() if num<5]))
+		table.add_row("Hotels:", list_or_dash([f"{loc}" for loc, num in self.buildings.items() if num==5]))
+
 		table.add_row("Get Out of Jail Cards:", str(self.jail_cards))
 
 
@@ -631,7 +622,7 @@ class Player:
 
 
 	def liquidate_assets(self, amount_needed):
-		c.print(f"[red]You must liquidate assets to get at least [bold]${amount_needed}[/bold] in cash. You currently have [/bold]${self.cash}[/bold] in cash.")
+		c.print(f"[red]You must liquidate assets to get at least [bold]${amount_needed}[/bold] in cash. You currently have [bold]${self.cash}[/bold] in cash.")
 		c.print("[red]You can do this by mortaging properties, selling buildings to the bank, or selling properties to another player.[/red]")
 
 		while self.cash < amount_needed:
@@ -656,104 +647,10 @@ class Player:
 					"However, buildings must first be sold back to the Bank before any property of that color-group can be mortgaged.\"[/dim italic]")
 
 			elif liq_choice == "Sell Buildings":
-				if not self.norm_properties_owned:
-					c.print("[red]You don't own any properties to sell houses/hotels on.[/red]")
-				elif not self.buildings:
-					c.print("[red]You don't own any houses or hotels.[/red]")
-				else:
-					available_locs = ["Cancel"]
-					for group in list(COLOR_GROUP_BUILDING_COSTS.keys()):
-						if all([x in self.norm_properties_owned and x not in self.mortgaged_properties for x in group]):
-							building_counts = [self.buildings.get(x, 0) for x in group]
-							max_build = max(building_counts)
-							for prop, count in zip(group, building_counts):
-								if count == max_build:
-									available_locs.append(prop)
-						
-					c.print("Which house would you like to sell a house/hotel on?")
-					loc = interactive_choice("Select a property:", available_locs)
-					if loc == "Cancel":
-						c.print("[red]Canceling.[/red]")
-					else:
-						building_cost = get_building_cost(loc)
-						c.print(f"At [bold]{loc}[/bold], you already have [bold]{f"{self.buildings[loc]} houses" if self.buildings[loc]<5 else "a hotel"}[/bold].")
-						c.print(f"You'll receive [bold]{building_cost//2}[/bold] for selling a house or hotel here.")
-						c.print("[i](Half the original building price)[/i]")
-						c.print("Would you like to sell a building here?")
-						confirm_build = interactive_choice("Select an option:", ["Yes", "No"])
-						if confirm_build == "Yes":
-							self.buildings[loc] -= 1
-							self.collect_without_networth(building_cost//2)
-							c.print(f"[green]You sold a building at [bold]{loc}[/bold].[/green]")
-							c.print(f"There are now [bold]{self.buildings[loc]}[/bold] houses at [bold]{loc}[/bold]")
-						else:
-							c.print("[red]Canceling.[/red]")
+				sell_building_dialog(self)
 							
 			elif liq_choice == "Sell Properties":
-				if not self.all_properties_owned():
-					c.print("[red]You don't own any properties to sell.[/red]")
-					continue
-
-				c.print("Select a property you are offering to sell.")
-				can_sell = [x for x in self.all_properties_owned() if x not in self.buildings]
-				to_sell = interactive_choice("Select an option:", can_sell + ["Cancel"])
-				if to_sell == "Cancel":
-					c.print("[red]Canceling.[/red]")
-				else:
-					c.print("Choose the player to offer this property to.")
-					buyer = interactive_choice("Select an option:", [p.name for p in non_bankrupt if p != self])
-					c.print("Select an amount to sell this property for.")
-					valid_offer = False
-					while not valid_offer:
-						try:
-							offer_price = int(input("> "))
-							valid_offer = True
-						except:
-							c.print("[red]Please input an integer number.[/red]")
-
-					buyer_obj = next(p for p in all_players if p.name == buyer)
-
-					ten_interest = True if to_sell in self.mortgaged_properties else buyer_obj.cash >= offer_price + 0.1 * valid_offer 
-					if (buyer_obj.cash >= offer_price) and ten_interest:
-						c.print(f"{buyer}, do you accept the offer of [bold]${offer_price}[/bold] for [bold]{to_sell}[/bold]?")
-						mortgaged = False
-						if to_sell in self.mortgaged_properties:
-							mortgaged = True
-							c.print("""[i]Note that this property is mortgaged by the current owner. You must either:
-	1) Immediately pay off the mortgage (the original mortgage value) plus 10% interest, or
-	2) Keep it mortgaged, and pay 10% anyway. Unmortgaging it later will cost another 10%.[/i]""")
-
-						accept_offer = interactive_choice("Select an option:", ["Yes", "No"])
-
-						if accept_offer == "Yes":
-							
-							self.collect_without_networth(offer_price)
-							buyer_obj.pay(offer_price)
-							self.sell_property(to_sell)
-							buyer_obj.get_property(to_sell)
-
-							if mortgaged:
-								self.mortgaged_properties.remove(to_sell)
-								buyer_obj.mortgaged_properties.append(to_sell)
-								c.print(f"[bold]{buyer_obj.name}[/bold], select an option to get this property.")
-								options = ["Keep mortgage but pay 10% interest"]
-								if buyer_obj.cash >= 1.1*get_property_cost(to_sell)// 2:
-									options.append("Unmortgage with 10% interest")
-
-								get_mortgaged_choice = interactive_choice("Select an option:", options)
-								if get_mortgaged_choice == "Unmortgage with 10% interest":
-									buyer_obj.unmortgage(to_sell)
-								else:
-									buyer_obj.pay(get_property_cost(to_sell) // 20)
-
-							c.print(f"[green][bold]{buyer}[/bold] accepted your offer.")
-							c.print(f"[green][bold]{buyer}[/bold] bought [bold]{to_sell}[/bold] from [bold]{self.name}[/bold] for [bold]${offer_price}[/bold].[/green]")
-
-						else:
-							c.print(f"[red][bold]{buyer}[/bold] turned down your offer.[/red]")
-						
-					else:
-						c.print(f"[red][bold]{buyer}[/bold] has insufficient cash to buy your property.[/red]")
+				sell_property_dialog(self)
 
 
 			c.print("Press [cyan]ENTER[/cyan] to continue.")
@@ -840,8 +737,9 @@ def interactive_choice(prompt, options):
 		style=custom_style
 	).ask()
 
-	if selected == "":
-		raise KeyboardInterrupt("User cancelled Questionary prompt")
+	if selected is None:
+		c.print("[red]Keyboard interrupt (CTRL+C) detected.[/red]")
+		sys.exit()
 
 	return selected.strip()
 
@@ -1023,13 +921,13 @@ def get_deed(deed_title):
 		if deed_title == "ELECTRIC COMPANY":
 			icon = Align.center(Text(BULB_ASCII, justify="center"))
 		else:
-			icon = Align.center(Text(TRAIN_ASCII, justify="center"))
+			icon = Align.center(Text(TAP_ASCII, justify="center"))
 		
 		lines = "━" * len(deed_title)
 		title_bar = Align.center(Text(f"{lines}\n{deed_title}\n{lines}", justify="center", style="bold white"))
-		text = "If one \"Utility\" is owned rent is 4 times amount shown on dice. If both \"Utilies\" are owned rent is 10 times amount shown on dice."
+		text = "\nIf one \"Utility\" is owned rent is 4 times amount shown on dice. If both \"Utilies\" are owned rent is 10 times amount shown on dice."
 
-		footer = Align.center(Text("Mortgage Value     $75\n"))
+		footer = Align.center(Text("\nMortgage Value     $75\n"))
 		card = Group(
 			icon,
 			title_bar,
@@ -1152,7 +1050,7 @@ def do_square_action(current_player: Player):
 
 	elif current_player.current_square == "INCOME TAX":
 		c.print("[red]You have to pay a tax of either [bold]10%[/bold] of your net worth or [bold]$200[/bold].[/red]")
-		c.print(f"Your net worth is [bold]${current_player.networth}[/bold].")
+		c.print(f"Your net worth is [bold]${current_player.networth}[/bold], and you have [bold]${current_player.cash}[/bold] in cash.")
 		c.print("Which tax would you like to pay?")
 		tax_choice = interactive_choice("Select an option:", [f"10% of net worth (${round(current_player.networth * 0.1)})", "$200"])
 
@@ -1207,6 +1105,140 @@ def do_square_action(current_player: Player):
 	c.print("Press [cyan]ENTER[/cyan] to continue.")
 	input()
 
+
+def sell_building_dialog(current_player: Player):
+	global modified_after_save
+	if not current_player.norm_properties_owned:
+		c.print("[red]You don't own any properties to sell houses/hotels on.[/red]")
+	elif not current_player.buildings:
+		c.print("[red]You don't own any houses or hotels.[/red]")
+	else:
+		available_locs = []
+		for group in list(COLOR_GROUP_BUILDING_COSTS.keys()):
+			if all([x in current_player.norm_properties_owned and x not in current_player.mortgaged_properties for x in group]):
+				building_counts = [current_player.buildings.get(x, 0) for x in group]
+				max_build = max(building_counts)
+				for prop, count in zip(group, building_counts):
+					if count == max_build and (not 5 in building_counts):
+						available_locs.append(prop)
+			
+		c.print("Which property would you like to sell a house/hotel on?")
+		c.print("You must sell your houses/hotels evenly.")
+		loc = interactive_choice("Select a property:", [f"{name} ({current_player.buildings.get(name, 0) if current_player.buildings.get(name, 0)!=5 else "HOTEL"})" for name in available_locs] + ["Cancel"])
+
+		if loc == "Cancel":
+			c.print("[red]Canceling.[/red]")
+		else:
+			loc = loc[:-4]
+			building_cost = get_building_cost(loc)
+			c.print(f"At [bold]{loc}[/bold], you already have [bold]{f"{current_player.buildings[loc]} house(s)" if current_player.buildings[loc]<5 else "a hotel"}[/bold].")
+			c.print(f"You'll receive [bold]${building_cost//2}[/bold] for selling a house or hotel here.")
+			c.print("[i](Half the original building price)[/i]")
+			c.print("Would you like to sell a building here?")
+			confirm_build = interactive_choice("Select an option:", ["Yes", "No"])
+			if confirm_build == "Yes":
+				current_player.buildings[loc] -= 1
+				current_player.collect_without_networth(building_cost//2)
+				c.print(f"[green]You sold a building at [bold]{loc}[/bold].[/green]")
+				c.print(f"There are now [bold]{current_player.buildings[loc]}[/bold] house(s) at [bold]{loc}[/bold].")
+
+				if current_player.buildings[loc] == 0:
+					del current_player.buildings[loc]
+
+				modified_after_save = True
+			else:
+				c.print("[red]Canceling.[/red]")
+
+def sell_property_dialog(current_player: Player):
+	global modified_after_save
+	if not current_player.all_properties_owned():
+		c.print("[red]You don't own any properties to sell.[/red]")
+	else:
+		c.print("Select a property you are offering to sell.")
+		can_sell = [x for x in current_player.all_properties_owned() if x not in current_player.buildings]
+		to_sell = interactive_choice("Select an option:", can_sell + ["Cancel"])
+		if to_sell == "Cancel":
+			c.print("[red]Canceling.[/red]")
+		else:
+
+			if to_sell in current_player.buildings.keys():
+				c.print("[red]You cannot sell this property without first selling all of its buildings to the bank.[/red]")
+			else:
+
+				c.print(f"This property has a value of [bold]${get_property_cost(to_sell)}[/bold].")
+				c.print("Here is the deed for this property:")
+				c.print(get_deed(to_sell))
+
+				c.print("Are you sure you want to sell this property?")
+				confirm_continue = interactive_choice("Select an option:", ("Yes, continue", "No, cancel"))
+				if confirm_continue == "No, cancel":
+					c.print("[red]Canceling.[/red]")
+				else:
+					c.print("Choose the player to offer this property to.")
+					buyer = interactive_choice("Select an option:", [p.name for p in non_bankrupt if p!=current_player])
+
+					c.print("Select an amount to sell this property for.")
+					valid_offer = False
+					while not valid_offer:
+						try:
+							offer_price = int(input("> "))
+							valid_offer = True
+						except:
+							c.print("[red]Please input an integer number.[/red]")
+
+					buyer_obj = next(p for p in all_players if p.name == buyer)
+
+					ten_interest = True if to_sell in current_player.mortgaged_properties else buyer_obj.cash >= offer_price + 0.1 * valid_offer 
+					if (buyer_obj.cash >= offer_price) and ten_interest:
+						c.print(f"{buyer}, do you accept the offer of [bold]${offer_price}[/bold] for [bold]{to_sell}[/bold]?")
+						mortgaged = False
+						if to_sell in current_player.mortgaged_properties:
+							mortgaged = True
+							c.print("""[i]Note that this property is mortgaged by the current owner. You must either:
+			1) Immediately pay off the mortgage (the original mortgage value) plus 10% interest, or
+			2) Keep it mortgaged, and pay 10% anyway. Unmortgaging it later will cost another 10%.[/i]""")
+
+						accept_offer = interactive_choice("Select an option:", ["Yes", "No"])
+
+						if accept_offer == "Yes":
+							
+							current_player.collect(offer_price)
+							current_player.pay(get_property_cost(to_sell))
+							buyer_obj.pay(offer_price)
+							
+							if to_sell in STATIONS:
+								current_player.railroads_owned.remove(to_sell)
+							elif to_sell in UTILITIES:
+								current_player.utilities_owned.remove(to_sell)
+							else:
+								current_player.norm_properties_owned.remove(to_sell)
+
+							buyer_obj.get_property(to_sell)
+
+							if mortgaged:
+								current_player.mortgaged_properties.remove(to_sell)
+								buyer_obj.mortgaged_properties.append(to_sell)
+								c.print(f"[bold]{buyer_obj.name}[/bold], select an option to get this property.")
+								options = ["Keep mortgage but pay 10% interest"]
+								if buyer_obj.cash >= 1.1*get_property_cost(to_sell) // 2:
+									options.append("Unmortgage with 10% interest")
+
+								get_mortgaged_choice = interactive_choice("Select an option:", options)
+								if get_mortgaged_choice == "Unmortgage with 10% interest":
+									buyer_obj.unmortgage(to_sell)
+								else:
+									buyer_obj.pay(int(get_property_cost(to_sell) / 2 * 1.1))
+									buyer_obj.cash//=1
+
+							modified_after_save = True
+							c.print(f"[green][bold]{buyer}[/bold] accepted your offer.")
+							c.print(f"[green][bold]{buyer}[/bold] bought [bold]{to_sell}[/bold] from [bold]{current_player.name}[/bold] for [bold]${offer_price}[/bold].[/green]")
+
+						else:
+							c.print(f"[red][bold]{buyer}[/bold] turned down your offer.[/red]")
+						
+					else:
+						c.print(f"[red][bold]{buyer}[/bold] has insufficient cash to buy your property.[/red]")
 
 #####################################################################################################################
 #    GAME LOOP    ###################################################################################################
@@ -1350,43 +1382,11 @@ def game_loop():
 						sys.exit()
 
 				elif choice == "Sell houses/hotels":
-					if not current_player.norm_properties_owned:
-						c.print("[red]You don't own any properties to sell houses/hotels on.[/red]")
-					elif not current_player.buildings:
-						c.print("[red]You don't own any houses or hotels.[/red]")
-					else:
-						available_locs = ["Cancel"]
-						for group in list(COLOR_GROUP_BUILDING_COSTS.keys()):
-							if all([x in current_player.norm_properties_owned and x not in current_player.mortgaged_properties for x in group]):
-								building_counts = [current_player.buildings.get(x, 0) for x in group]
-								max_build = max(building_counts)
-								for prop, count in zip(group, building_counts):
-									if count == max_build:
-										available_locs.append(prop)
-							
-						c.print("Which house would you like to sell a house/hotel on?")
-						loc = interactive_choice("Select a property:", available_locs)
-						if loc == "Cancel":
-							c.print("[red]Canceling.[/red]")
-						else:
-							building_cost = get_building_cost(loc)
-							c.print(f"At [bold]{loc}[/bold], you already have [bold]{f"{current_player.buildings[loc]} houses" if current_player.buildings[loc]<5 else "a hotel"}[/bold].")
-							c.print(f"You'll receive [bold]{building_cost//2}[/bold] for selling a house or hotel here.")
-							c.print("[i](Half the original building price)[/i]")
-							c.print("Would you like to sell a building here?")
-							confirm_build = interactive_choice("Select an option:", ["Yes", "No"])
-							if confirm_build == "Yes":
-								current_player.buildings[loc] -= 1
-								current_player.collect_without_networth(building_cost//2)
-								c.print(f"[green]You sold a building at [bold]{loc}[/bold].[/green]")
-								c.print(f"There are now [bold]{current_player.buildings[loc]}[/bold] houses at [bold]{loc}[/bold]")
-								modified_after_save = True
-							else:
-								c.print("[red]Canceling.[/red]")
+					sell_building_dialog(current_player)
 
 
 				elif choice == "Build houses/hotels":
-					available_locs = ["Cancel"]
+					available_locs = []
 		
 					for group in list(COLOR_GROUP_BUILDING_COSTS.keys()):
 						if all([x in current_player.norm_properties_owned and x not in current_player.mortgaged_properties for x in group]):
@@ -1398,93 +1398,50 @@ def game_loop():
 					
 					if len(available_locs) == 0:
 						c.print("[red]There are no properties that you can build a house on at this moment.[/red]")
+						c.print("You must own all of one Color-Group to construct houses or hotels.")
 
 					else:
 						c.print("Where would you like to build your house?")
-						loc = interactive_choice("Select a property:", available_locs)
+						c.print("You must build evenly: you can't add 2 houses to a property until each property in the set has 1 house.")
+						loc = interactive_choice("Select a property:", [f"{name} ({current_player.buildings.get(name, 0) if current_player.buildings.get(name, 0)!=5 else "HOTEL"})" for name in available_locs] + ["Cancel"])
 						if loc == "Cancel":
 							c.print("[red]Canceling.[/red]")
 						else:
+
+							loc = loc[:-4]
+
 							building_cost = get_building_cost(loc)
 
 							if current_player.networth >= building_cost:
-								c.print(f"At [bold]{loc}[/bold], you already have [bold]{f"{current_player.buildings[loc]} houses" if current_player.buildings[loc]<5 else "a hotel"}[/bold].")
-								c.print(f"Building a house will cost [bold]${building_cost}[/bold]. Your net worth is [bold]${current_player.networth}[/bold].")
+								c.print(f"At [bold]{loc}[/bold], you already have [bold]{f"{current_player.buildings.get(loc, 0)} houses" if current_player.buildings.get(loc, 0)<5 else "a hotel"}[/bold].")
+								c.print(f"Building a house will cost [bold]${building_cost}[/bold].")
+								c.print(f"Your net worth is [bold]${current_player.networth}[/bold], and you have [bold]${current_player.cash}[/bold] in cash.")
+
 								c.print("Would you like to build a house here?")
 								confirm_build = interactive_choice("Select an option:", ["Yes", "No"])
 								if confirm_build == "Yes":
-									current_player.build_house(loc)
-									c.print(f"[green]You built a house/hotel at [bold]{loc}[/bold].[/green]")
-									modified_after_save = True
+									if current_player.cash >= get_building_cost(loc):
+										current_player.build_house(loc)
+										current_player.pay_fees_without_networth(get_building_cost(loc))
+										c.print(f"[green]You built a house/hotel at [bold]{loc}[/bold].[/green]")
+										modified_after_save = True
+									else:
+										c.print(f"[red]You do not have enough cash to build a house at {loc}. (${current_player.networth} < ${building_cost}).")
+										c.print("Would you like to liquify some of your assets?")
+										liq = interactive_choice("Select an option", ("Yes, liquify", "No, cancel"))
+										if liq == "Yes, liquify":
+											current_player.liquidate_assets(get_building_cost(loc)-current_player.cash)
+											current_player.build_house(loc)
+											current_player.pay_fees_without_networth(get_building_cost(loc))
+											c.print(f"[green]You built a house/hotel at [bold]{loc}[/bold].[/green]")
+											modified_after_save = True
+										else:
+											c.print("[red]Canceling.[/red]")
 							else:
 								c.print(f"[red]You do not have enough money to build a house at {loc}. (${current_player.networth} < ${building_cost}).")
 				
 				elif choice == "Sell property":
-					if not current_player.all_properties_owned():
-						c.print("[red]You don't own any properties to sell.[/red]")
-						continue
-					
-					c.print("Select a property you are offering to sell.")
-					can_sell = [x for x in current_player.all_properties_owned() if x not in current_player.buildings]
-					to_sell = interactive_choice("Select an option:", can_sell + ["Cancel"])
-					if to_sell == "Cancel":
-						c.print("[red]Canceling.[/red]")
-					else:
-						c.print("Choose the player to offer this property to.")
-						buyer = interactive_choice("Select an option:", [p.name for p in non_bankrupt if p!=current_player])
-						c.print("Select an amount to sell this property for.")
-						valid_offer = False
-						while not valid_offer:
-							try:
-								offer_price = int(input("> "))
-								valid_offer = True
-							except:
-								c.print("[red]Please input an integer number.[/red]")
-
-						buyer_obj = next(p for p in all_players if p.name == buyer)
-
-						ten_interest = True if to_sell in current_player.mortgaged_properties else buyer_obj.cash >= offer_price + 0.1 * valid_offer 
-						if (buyer_obj.cash >= offer_price) and ten_interest:
-							c.print(f"{buyer}, do you accept the offer of [bold]${offer_price}[/bold] for [bold]{to_sell}[/bold]?")
-							mortgaged = False
-							if to_sell in current_player.mortgaged_properties:
-								mortgaged = True
-								c.print("""[i]Note that this property is mortgaged by the current owner. You must either:
-	1) Immediately pay off the mortgage (the original mortgage value) plus 10% interest, or
-	2) Keep it mortgaged, and pay 10% anyway. Unmortgaging it later will cost another 10%.[/i]""")
-
-							accept_offer = interactive_choice("Select an option:", ["Yes", "No"])
-
-							if accept_offer == "Yes":
-								
-								current_player.collect_without_networth(offer_price)
-								buyer_obj.pay(offer_price)
-								current_player.sell_property(to_sell)
-								buyer_obj.get_property(to_sell)
-
-								if mortgaged:
-									current_player.mortgaged_properties.remove(to_sell)
-									buyer_obj.mortgaged_properties.append(to_sell)
-									c.print(f"[bold]{buyer_obj.name}[/bold], select an option to get this property.")
-									options = ["Keep mortgage but pay 10% interest"]
-									if buyer_obj.cash >= 1.1*get_property_cost(to_sell) // 2:
-										options.append("Unmortgage with 10% interest")
-
-									get_mortgaged_choice = interactive_choice("Select an option:", options)
-									if get_mortgaged_choice == "Unmortgage with 10% interest":
-										buyer_obj.unmortgage(to_sell)
-									else:
-										buyer_obj.pay(get_property_cost(to_sell) // 20)
-										buyer_obj.cash//=1
-
-								c.print(f"[green][bold]{buyer}[/bold] accepted your offer.")
-								c.print(f"[green][bold]{buyer}[/bold] bought [bold]{to_sell}[/bold] from [bold]{current_player.name}[/bold] for [bold]${offer_price}[/bold].[/green]")
-
-							else:
-								c.print(f"[red][bold]{buyer}[/bold] turned down your offer.[/red]")
-							
-						else:
-							c.print(f"[red][bold]{buyer}[/bold] has insufficient cash to buy your property.[/red]")
+					sell_property_dialog(current_player)
 				
 				elif choice == "Mortgage property":
 					if not current_player.all_properties_owned():
@@ -1515,8 +1472,9 @@ def game_loop():
 						if to_unmortgage == "Cancel":
 							c.print("[red]Canceling...[/red]")
 						else:
-							unmortgage_value = (get_property_cost(to_unmortgage) // 2 * 1.1)//1
+							unmortgage_value = int(get_property_cost(to_unmortgage) / 2 * 1.1)
 							c.print(f"Are you sure you would like to unmortgage [bold]{to_unmortgage}[/bold] for [bold]${unmortgage_value}[/bold]?")
+							c.print("[i]Unmortgaging a property will cost you 10% interest.[/i]")
 							confirm_unmortgage = interactive_choice("Select an option:", ["Yes", "No"])
 							if confirm_unmortgage == "Yes":
 								current_player.unmortgage(to_unmortgage)
