@@ -1,10 +1,11 @@
-# monopoly
-Python terminal-based Monopoly game
-Based off of the Classic Edition of Monopoly by Hasbro, Inc
-GUI version may be coming soon
+# Monopoly
+Python terminal-based Monopoly game  
+Based off of the Classic Edition of Monopoly by Hasbro, Inc  
+GUI version may be coming soon  
+<hr>
 
 ### Features
-Save/load games easily 
+Save/load games quickly and easily 
 ![Screenshot 2025-06-29 164224](https://github.com/user-attachments/assets/194e523e-ef7a-4ee0-9400-6b14a11c1e20)
 
 Game-accurate property deeds
@@ -20,7 +21,7 @@ User friendly interfaces
 
 [Menu Demo.mp4](https://github.com/user-attachments/assets/a215e67b-0d21-4675-869d-9e3c447cc23e)
 
-Debug mode  
+Toggleable debug mode  
 ![image](https://github.com/user-attachments/assets/ae7ffc3a-33f3-4e73-bd66-5c3eece30f25)
 
 
